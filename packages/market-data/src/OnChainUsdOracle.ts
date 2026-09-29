@@ -22,7 +22,9 @@ export class OnChainUsdOracle implements IUsdPriceOracle {
       const { baseToken, usdToken, dex, probeAmount } = this.o;
       const amountIn = toUnits(probeAmount, baseToken.decimals);
       const q = await dex.quote(baseToken, usdToken, amountIn);
-      const baseUsd = toNumber(q.amountOut, usdToken.decimals) / probeAmount;
+      // quote is net of the pool fee (hundredths of a bip, e.g. 3000 = 0.3%); gross it up to get the mid price
+      const feeFrac = (q.fee ?? 0) / 1_000_000;
+      const baseUsd = toNumber(q.amountOut, usdToken.decimals) / probeAmount / (1 - feeFrac);
       const quoteUsd = deriveQuoteUsd(baseUsd, this.o.midPrice() ?? 0);
       if (!(baseUsd > 0) || quoteUsd === null) return null;
       return { baseUsd, quoteUsd };

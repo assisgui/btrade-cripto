@@ -85,7 +85,7 @@ export interface MarketSnapshot {
 
 export interface UsdValuation {
   monUsd: number;
-  cbBtcUsd: number;
+  quoteUsd: number;
   portfolioUsd: number;
 }
 

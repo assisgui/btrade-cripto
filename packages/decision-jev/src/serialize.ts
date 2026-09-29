@@ -26,7 +26,7 @@ export function serializeState(s: MarketSnapshot, c: RiskConstraintsForModel): R
           unrealizedPnlPct: r(s.unrealizedPnlPct, 4),
         }
       : null,
-    usd: s.usd ? { monUsd: r(s.usd.monUsd, 4), btcUsd: r(s.usd.cbBtcUsd, 6) } : null,
+    usd: s.usd ? { [`${base.symbol}Usd`]: r(s.usd.monUsd, 6), [`${quote.symbol}Usd`]: r(s.usd.quoteUsd, 6) } : null,
     secondsSinceLastTrade: s.secondsSinceLastTrade,
     lastDecision: s.lastDecision,
     indicators: i && {

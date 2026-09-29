@@ -152,7 +152,7 @@ export class TradingBot {
       realized = r.realizedPnlQuote;
       this.d.storage.positions.save(key, r.position);
     }
-    const qUsd = snap.usd?.cbBtcUsd ?? null;
+    const qUsd = snap.usd?.quoteUsd ?? null;
     const gasNative = toNumber(res.gasUsed ? res.gasUsed * snap.gasPrice : snap.estGasCostNative, 18);
     const trade: Trade = {
       ts: now / 1000, side: isBuy ? 'buy' : 'sell', mode: this.d.mode, tokenIn: tokenIn.address, tokenOut: tokenOut.address,
@@ -188,18 +188,18 @@ export class TradingBot {
     if (raw) {
       init = JSON.parse(raw) as HodlInit;
       if (init.baseUsd === null && snap.usd) { // USD was unavailable on the first run: backfill once
-        init = { ...init, baseUsd: snap.usd.monUsd, quoteUsd: snap.usd.cbBtcUsd };
+        init = { ...init, baseUsd: snap.usd.monUsd, quoteUsd: snap.usd.quoteUsd };
         st.set(key, JSON.stringify(init));
       }
     } else {
-      init = { ts: snap.timestamp, base: b, quote: q, price: snap.price, baseUsd: snap.usd?.monUsd ?? null, quoteUsd: snap.usd?.cbBtcUsd ?? null };
+      init = { ts: snap.timestamp, base: b, quote: q, price: snap.price, baseUsd: snap.usd?.monUsd ?? null, quoteUsd: snap.usd?.quoteUsd ?? null };
       st.set(key, JSON.stringify(init));
     }
-    const m = portfolioMetrics(init, b, q, snap.price, snap.usd?.monUsd ?? null, snap.usd?.cbBtcUsd ?? null);
+    const m = portfolioMetrics(init, b, q, snap.price, snap.usd?.monUsd ?? null, snap.usd?.quoteUsd ?? null);
     const f = (n: number | null, d = 2) => (n === null ? null : Number(n.toFixed(d)));
     this.d.log.info(
       {
-        valueQuote: Number(m.valueQuote.toFixed(8)), valueUsd: f(m.valueUsd), monUsd: f(snap.usd?.monUsd ?? null, 5), btcUsd: f(snap.usd?.cbBtcUsd ?? null, 0),
+        valueQuote: Number(m.valueQuote.toFixed(8)), valueUsd: f(m.valueUsd), monUsd: f(snap.usd?.monUsd ?? null, 5), quoteUsd: f(snap.usd?.quoteUsd ?? null, 0),
         pnlQuotePct: f(m.pnlQuotePct, 3), pnlUsdPct: f(m.pnlUsdPct, 3), vsHodlQuotePct: f(m.vsHodlQuotePct, 3),
       },
       'portfolio',

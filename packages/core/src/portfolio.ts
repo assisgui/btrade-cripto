@@ -25,14 +25,14 @@ export interface PortfolioMetrics {
 
 const pct = (a: number, b: number): number => (b > 0 ? (a / b - 1) * 100 : 0);
 
-/** cbBTC/USD derived from BASE/USD and the mid price (QUOTE per BASE). */
+/** QUOTE/USD derived from BASE/USD and the mid price (QUOTE per BASE). */
 export const deriveQuoteUsd = (baseUsd: number, midPrice: number): number | null =>
   baseUsd > 0 && midPrice > 0 ? baseUsd / midPrice : null;
 
 export const valueInQuote = (base: number, quote: number, price: number): number => base * price + quote;
 
 export function usdValuation(base: number, quote: number, baseUsd: number, quoteUsd: number): UsdValuation {
-  return { monUsd: baseUsd, cbBtcUsd: quoteUsd, portfolioUsd: base * baseUsd + quote * quoteUsd };
+  return { monUsd: baseUsd, quoteUsd: quoteUsd, portfolioUsd: base * baseUsd + quote * quoteUsd };
 }
 
 /** Portfolio value and performance vs start and vs a buy-and-hold of the initial balances. */

@@ -1,0 +1,25 @@
+{
+  "name": "btrade",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env apps/bot/src/main.ts",
+    "start": "tsx --env-file-if-exists=.env apps/bot/src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "fork": "sh scripts/fork.sh",
+    "fork:fund": "tsx --env-file-if-exists=.env apps/bot/scripts/forkFund.ts",
+    "report": "tsx --env-file-if-exists=.env apps/bot/scripts/report.ts",
+    "fork:e2e": "tsx --env-file-if-exists=.env apps/bot/scripts/forkE2e.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "pino-pretty": "^13.1.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

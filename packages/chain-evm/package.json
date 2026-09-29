@@ -1,0 +1,8 @@
+{
+  "name": "@btrade/chain-evm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@btrade/core": "workspace:*", "viem": "^2.21.0" }
+}

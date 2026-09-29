@@ -1,0 +1,8 @@
+{
+  "name": "@btrade/dex-uniswap-v3",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@btrade/core": "workspace:*", "@btrade/chain-evm": "workspace:*", "viem": "^2.21.0" }
+}

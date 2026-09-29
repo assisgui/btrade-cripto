@@ -1,0 +1,12 @@
+{
+  "name": "@btrade/bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@btrade/core": "workspace:*", "@btrade/chain-evm": "workspace:*", "@btrade/dex-uniswap-v3": "workspace:*",
+    "@btrade/market-data": "workspace:*", "@btrade/decision-jev": "workspace:*", "@btrade/risk": "workspace:*",
+    "@btrade/storage": "workspace:*", "@btrade/notifier": "workspace:*",
+    "pino": "^9.5.0", "zod": "^3.23.0", "viem": "^2.21.0"
+  }
+}

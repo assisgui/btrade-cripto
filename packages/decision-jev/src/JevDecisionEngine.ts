@@ -1,5 +1,5 @@
 import { choice, TypeSafeClient } from '@typesafe-ai/sdk';
-import type { Action, Decision, IDecisionEngine, MarketSnapshot, SizeBucket } from '@btrade/core';
+import type { Action, Decision, DecisionContext, IDecisionEngine, MarketSnapshot, SizeBucket } from '@btrade/core';
 import type { RiskConstraintsForModel } from './constraints.js';
 import { serializeState } from './serialize.js';
 
@@ -8,6 +8,8 @@ export interface JevOptions {
   constraints: RiskConstraintsForModel;
   /** optional injected client (tests); defaults to new TypeSafeClient() reading TYPESAFE_API_KEY */
   client?: Pick<TypeSafeClient, 'systemOne'>;
+  /** debug logger (pino-compatible) for the exact state sent to jev */
+  log?: { debug(obj: Record<string, unknown>, msg: string): void };
 }
 
 export class JevDecisionEngine implements IDecisionEngine {
@@ -17,17 +19,19 @@ export class JevDecisionEngine implements IDecisionEngine {
     this.client = o.client ?? new TypeSafeClient();
   }
 
-  async decide(s: MarketSnapshot): Promise<Decision> {
+  async decide(s: MarketSnapshot, ctx?: DecisionContext): Promise<Decision> {
     const { base, quote } = s.pair;
+    const state = serializeState(s, this.o.constraints, ctx);
+    this.o.log?.debug({ state }, 'jev state');
     const res = await this.client.systemOne({
       model: this.o.model,
-      state: serializeState(s, this.o.constraints),
+      state,
       questions: {
         action: choice(
-          `What should the bot do now with the ${base.symbol}/${quote.symbol} position? Consider momentum, RSI, costs, and the stated constraints.`,
+          `What should the bot do now with the ${base.symbol}/${quote.symbol} position? Goal: maximize portfolio value in ${quote.symbol}. Use the objective, portfolio, indicators, recentCloses and the \`now\` block (what is allowed right now).`,
           {
-            buy: `Buy ${base.symbol} using ${quote.symbol} (price expected to rise, or a good entry).`,
-            sell: `Sell ${base.symbol} for ${quote.symbol} (take profit / exit; must respect the minimum profit constraint unless stop-loss).`,
+            buy: `Buy ${base.symbol} using ${quote.symbol} (expected to outperform holding ${quote.symbol}; only executes if now.buyAllowedNow is true).`,
+            sell: `Sell ${base.symbol} for ${quote.symbol} (protect value; only executes if now.sellAllowedNow is true).`,
             hold: 'Do nothing: no clear edge, costs too high, or waiting is better.',
           },
         ),

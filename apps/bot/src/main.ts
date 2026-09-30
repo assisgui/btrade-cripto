@@ -103,6 +103,7 @@ async function main() {
       ? new JevDecisionEngine({
           model: c.JEV_MODEL,
           constraints: { minProfitPct: c.MIN_PROFIT_PCT, stopLossPct: c.STOP_LOSS_PCT, gasReserveNative: c.GAS_RESERVE_NATIVE, minConfidence: c.MIN_CONFIDENCE, sizePct },
+          log,
         })
       : new MockDecisionEngine({ mode: c.MOCK_MODE, fixedAction: c.MOCK_ACTION });
   const risk = new RiskManager(
@@ -131,8 +132,8 @@ async function main() {
   } else if (c.USD_ORACLE === 'onchain') log.warn('USD oracle unavailable for this pair/chain; USD values disabled');
 
   const bot: TradingBot = new TradingBot(
-    { pair, mode: c.MODE, engineName: c.DECISION_ENGINE, builder, detector, engine, risk, dex, storage, notifier, usdOracle, log },
-    { pollIntervalSec: c.POLL_INTERVAL_SEC, gasReserve, initialCostBasis: c.INITIAL_COST_BASIS, maxTicks: c.MAX_TICKS, portfolioSnapshotSec: c.PORTFOLIO_SNAPSHOT_SEC },
+    { pair, mode: c.MODE, engineName: c.DECISION_ENGINE, builder, detector, engine, risk, dex, storage, notifier, balances, usdOracle, log },
+    { pollIntervalSec: c.POLL_INTERVAL_SEC, gasReserve, initialCostBasis: c.INITIAL_COST_BASIS, maxTicks: c.MAX_TICKS, portfolioSnapshotSec: c.PORTFOLIO_SNAPSHOT_SEC, flowToleranceNative: c.FLOW_TOLERANCE_NATIVE },
   );
 
   log.info({ mode: c.MODE, chain: `${chainCfg.name}/${chainCfg.network}`, dex: dex.name, base: base.symbol, quote: quote.symbol, wallet: chain.address ?? '(none)' }, 'btrade starting');

@@ -38,6 +38,8 @@ export interface Indicators {
   emaShort: number | null;
   emaLong: number | null;
   rsi14: number | null;
+  /** last closes of the short (5m) candles, ascending, raw prices */
+  recentCloses?: number[] | null;
 }
 
 export interface Position {
@@ -132,4 +134,41 @@ export interface ChainConfig {
   /** dex name -> contract addresses (e.g. uniswap-v3: factory/swapRouter/quoter) */
   dexes: Record<string, Record<string, Address>>;
   geckoNetwork?: string;
+}
+
+/** External deposit (+) / withdrawal (-) detected in the bot wallet. amount in whole units. */
+export interface Flow {
+  id?: number;
+  /** unix seconds */
+  ts: number;
+  asset: 'base' | 'quote';
+  amount: number;
+  /** QUOTE per BASE at detection time */
+  price: number;
+  valueQuote: number;
+  valueUsd: number | null;
+}
+
+export type SellReason = 'profit_target_reached' | 'stop_loss_active' | 'below_profit_target' | 'no_base_available';
+export interface BucketValue { value: number; belowMin: boolean }
+export type BucketValues = Record<SizeBucket, BucketValue>;
+
+/** What is possible right now under the risk rules (computed by @btrade/risk). Values in QUOTE. */
+export interface NowState {
+  sellAllowedNow: boolean;
+  sellReason: SellReason;
+  buyAllowedNow: boolean;
+  buyReason: 'ok' | 'no_quote_balance' | 'below_min_trade_value';
+  /** % the executable sell price must move to reach the profit target (positive = needs to rise) */
+  pctToProfitTarget: number | null;
+  /** % the sell price must move to reach the stop-loss (negative = needs to fall); null when disabled */
+  pctToStopLoss: number | null;
+  blocked: { cooldownSecLeft: number; dailyTradesLeft: number; dailyLossLimitHit: boolean };
+  tradeValueByBucket: { buy: BucketValues; sell: BucketValues };
+}
+
+/** Extra context handed to the decision engine alongside the snapshot. */
+export interface DecisionContext {
+  now?: NowState;
+  pnlPctVsInvested?: number | null;
 }

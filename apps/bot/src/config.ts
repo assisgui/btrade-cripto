@@ -63,6 +63,7 @@ const schema = z.object({
   MAX_TRADES_PER_DAY: num(6),
   MAX_DAILY_LOSS_PCT: num(5),
 
+  FLOW_TOLERANCE_NATIVE: num(0.5),
   USD_ORACLE: z.enum(['onchain', 'off']).default('onchain'),
   PORTFOLIO_SNAPSHOT_SEC: num(300),
 

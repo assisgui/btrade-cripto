@@ -1,5 +1,5 @@
 import type {
-  Address, Candle, ChainConfig, Decision, Hex, MarketSnapshot, Pair, PortfolioSnapshot, Position, Timeframe, Token, Trade,
+  Address, Candle, ChainConfig, Decision, DecisionContext, Flow, Hex, NowState, MarketSnapshot, Pair, PortfolioSnapshot, Position, Timeframe, Token, Trade,
 } from './types.js';
 
 export interface IChainAdapter {
@@ -70,7 +70,7 @@ export interface IMarketDataProvider {
 }
 
 export interface IDecisionEngine {
-  decide(snapshot: MarketSnapshot): Promise<Decision>;
+  decide(snapshot: MarketSnapshot, ctx?: DecisionContext): Promise<Decision>;
 }
 
 export interface RiskVerdict {
@@ -84,6 +84,8 @@ export type QuoteFn = (tokenIn: Token, tokenOut: Token, amountIn: bigint) => Pro
 
 export interface IRiskManager {
   evaluate(decision: Decision, snapshot: MarketSnapshot, quoteFn: QuoteFn): Promise<RiskVerdict>;
+  /** what is possible right now (sell/buy allowed, limits, bucket values) */
+  assess(snapshot: MarketSnapshot): NowState;
 }
 
 export type BotEvent =
@@ -92,6 +94,7 @@ export type BotEvent =
   | { type: 'decision'; decision: Decision; price: number }
   | { type: 'vetoed'; decision: Decision; reasons: string[] }
   | { type: 'trade'; trade: Trade }
+  | { type: 'flow'; flow: Flow }
   | { type: 'error'; message: string };
 
 export interface INotifier {
@@ -140,7 +143,15 @@ export interface IBotStateRepository {
   list(prefix: string): { key: string; value: string }[];
 }
 
+export interface IFlowRepository {
+  insert(f: Flow): void;
+  all(): Flow[];
+  recent(limit: number): Flow[];
+  count(): number;
+}
+
 export interface IStorage {
+  flows: IFlowRepository;
   trades: ITradeRepository;
   positions: IPositionRepository;
   decisions: IDecisionLogRepository;

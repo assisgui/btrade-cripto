@@ -1,10 +1,11 @@
 import type { Logger } from 'pino';
 import {
-  pairKey, toNumber, portfolioMetrics, usdValuation, type BotEvent, type HodlInit, type IUsdPriceOracle, type Decision, type IDecisionEngine, type IDexAdapter, type INotifier,
+  pairKey, toNumber, portfolioMetrics, usdValuation, type BotEvent, type HodlInit, type IUsdPriceOracle, type Decision, type IBalanceSource, type IDecisionEngine, type IDexAdapter, type INotifier,
   type IRiskManager, type IStorage, type MarketSnapshot, type Pair, type Trade,
 } from '@btrade/core';
 import type { ChangeDetector, SnapshotBuilder } from '@btrade/market-data';
 import { applyBuy, applySell } from '@btrade/storage';
+import { FlowTracker } from './FlowTracker.js';
 
 export interface TradingBotDeps {
   pair: Pair;
@@ -17,6 +18,7 @@ export interface TradingBotDeps {
   dex: IDexAdapter;
   storage: IStorage;
   notifier: INotifier;
+  balances: IBalanceSource;
   usdOracle?: IUsdPriceOracle | null;
   log: Logger;
 }
@@ -27,6 +29,8 @@ export interface TradingBotOptions {
   initialCostBasis?: number;
   maxTicks?: number;
   portfolioSnapshotSec?: number;
+  /** native units treated as gas (not a withdrawal) when native balance drops */
+  flowToleranceNative?: number;
 }
 
 export class TradingBot {
@@ -37,8 +41,15 @@ export class TradingBot {
   /** latest mid price (QUOTE per BASE); read by the USD oracle */
   lastMid: number | null = null;
   private lastPortfolioTs = 0;
+  private pnlPctVsInvested: number | null = null;
+  private readonly flows: FlowTracker;
 
-  constructor(private readonly d: TradingBotDeps, private readonly o: TradingBotOptions) {}
+  constructor(private readonly d: TradingBotDeps, private readonly o: TradingBotOptions) {
+    this.flows = new FlowTracker({
+      pair: d.pair, mode: d.mode, storage: d.storage, notifier: d.notifier, balances: d.balances, log: d.log,
+      nativeTolerance: o.flowToleranceNative ?? 0.5,
+    });
+  }
 
   start(): Promise<void> {
     this.running = true;
@@ -56,6 +67,7 @@ export class TradingBot {
   private async loop(): Promise<void> {
     const { log, pair } = this.d;
     await this.d.notifier.notify({ type: 'started', mode: this.d.mode, pair: pairKey(pair), engine: this.d.engineName });
+    this.d.storage.state.set('pair_info', JSON.stringify({ baseDecimals: pair.base.decimals, quoteDecimals: pair.quote.decimals }));
     while (this.running) {
       await this.tick();
       this.ticks++;
@@ -91,6 +103,7 @@ export class TradingBot {
       this.ensureCostBasis(snap);
       this.lastMid = snap.price > 0 ? snap.price : null;
       await this.attachUsd(snap);
+      await this.flows.check(snap);
       this.reportPortfolio(snap);
       log.info(
         {
@@ -104,7 +117,7 @@ export class TradingBot {
         log.debug({ reason: change.reason }, 'no meaningful change; skipping decision');
         return;
       }
-      const decision = await this.d.engine.decide(snap);
+      const decision = await this.d.engine.decide(snap, { now: this.d.risk.assess(snap), pnlPctVsInvested: this.pnlPctVsInvested });
       this.d.detector.markSent(snap);
       this.d.storage.state.set('lastDecision', JSON.stringify({ action: decision.action, confidence: decision.confidence, at: snap.timestamp }));
       log.info({ trigger: change.reason, action: decision.action, size: decision.sizeBucket, confidence: decision.confidence, p: decision.probabilities }, 'decision');
@@ -195,12 +208,13 @@ export class TradingBot {
       init = { ts: snap.timestamp, base: b, quote: q, price: snap.price, baseUsd: snap.usd?.monUsd ?? null, quoteUsd: snap.usd?.quoteUsd ?? null };
       st.set(key, JSON.stringify(init));
     }
-    const m = portfolioMetrics(init, b, q, snap.price, snap.usd?.monUsd ?? null, snap.usd?.quoteUsd ?? null);
+    const m = portfolioMetrics(init, b, q, snap.price, snap.usd?.monUsd ?? null, snap.usd?.quoteUsd ?? null, this.d.storage.flows.all());
+    this.pnlPctVsInvested = m.pnlQuotePct;
     const f = (n: number | null, d = 2) => (n === null ? null : Number(n.toFixed(d)));
     this.d.log.info(
       {
         valueQuote: Number(m.valueQuote.toFixed(8)), valueUsd: f(m.valueUsd), monUsd: f(snap.usd?.monUsd ?? null, 5), quoteUsd: f(snap.usd?.quoteUsd ?? null, 0),
-        pnlQuotePct: f(m.pnlQuotePct, 3), pnlUsdPct: f(m.pnlUsdPct, 3), vsHodlQuotePct: f(m.vsHodlQuotePct, 3),
+        investedQuote: Number(m.investedQuote.toFixed(8)), investedUsd: f(m.investedUsd), pnlQuotePct: f(m.pnlQuotePct, 3), pnlUsdPct: f(m.pnlUsdPct, 3), vsHodlQuotePct: f(m.vsHodlQuotePct, 3),
       },
       'portfolio',
     );

@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type {
   Decision, IBotStateRepository, IDecisionLogRepository, IPaperBalanceRepository, IPositionRepository, IStorage,
-  ITradeRepository, MarketSnapshot, Position, Trade, IPortfolioRepository, PortfolioSnapshot,
+  ITradeRepository, MarketSnapshot, Position, Trade, IPortfolioRepository, PortfolioSnapshot, Flow, IFlowRepository,
 } from '@btrade/core';
 
 // loaded via require: vite/vitest can't resolve the `node:sqlite` builtin through static import
@@ -123,6 +123,29 @@ class PortfolioRepo implements IPortfolioRepository {
   }
 }
 
+class FlowRepo implements IFlowRepository {
+  constructor(private db: DatabaseSync) {}
+  insert(f: Flow): void {
+    this.db.prepare('INSERT INTO flows (ts, asset, amount, price, value_quote, value_usd) VALUES (?,?,?,?,?,?)')
+      .run(f.ts, f.asset, f.amount, f.price, f.valueQuote, f.valueUsd);
+  }
+  private map(r: Record<string, unknown>): Flow {
+    return {
+      id: r.id as number, ts: r.ts as number, asset: r.asset as 'base' | 'quote', amount: r.amount as number, price: r.price as number,
+      valueQuote: r.value_quote as number, valueUsd: (r.value_usd as number | null) ?? null,
+    };
+  }
+  all(): Flow[] {
+    return this.db.prepare('SELECT * FROM flows ORDER BY id ASC').all().map((r) => this.map(r));
+  }
+  recent(limit: number): Flow[] {
+    return this.db.prepare('SELECT * FROM flows ORDER BY id DESC LIMIT ?').all(limit).map((r) => this.map(r));
+  }
+  count(): number {
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM flows').get() as { n: number }).n);
+  }
+}
+
 /** Idempotent: adds a column only when missing (existing DBs keep working). */
 function addColumnIfMissing(db: DatabaseSync, table: string, column: string, type: string): void {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
@@ -137,6 +160,7 @@ export class SqliteStorage implements IStorage {
   readonly paperBalances: IPaperBalanceRepository;
   readonly state: IBotStateRepository;
   readonly portfolio: IPortfolioRepository;
+  readonly flows: IFlowRepository;
 
   /** path ':memory:' for tests */
   constructor(path: string) {
@@ -155,6 +179,8 @@ export class SqliteStorage implements IStorage {
       CREATE TABLE IF NOT EXISTS bot_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS portfolio_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, balance_base REAL NOT NULL,
         balance_quote REAL NOT NULL, value_quote REAL NOT NULL, value_usd REAL, hodl_value_quote REAL NOT NULL, hodl_value_usd REAL);
+      CREATE TABLE IF NOT EXISTS flows (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, asset TEXT NOT NULL, amount REAL NOT NULL,
+        price REAL NOT NULL, value_quote REAL NOT NULL, value_usd REAL);
     `);
     for (const c of ['value_usd', 'gas_usd', 'realized_pnl_usd']) addColumnIfMissing(this.db, 'trades', c, 'REAL');
     this.trades = new TradeRepo(this.db);
@@ -163,6 +189,7 @@ export class SqliteStorage implements IStorage {
     this.paperBalances = new PaperBalanceRepo(this.db);
     this.state = new BotStateRepo(this.db);
     this.portfolio = new PortfolioRepo(this.db);
+    this.flows = new FlowRepo(this.db);
   }
 
   close(): void {

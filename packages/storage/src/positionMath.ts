@@ -19,3 +19,8 @@ export function applySell(pos: Position, baseSold: bigint, price: number, baseDe
     realizedPnlQuote: realized,
   };
 }
+
+/** External BASE withdrawal: reduces size, no realized PnL, avg entry unchanged. */
+export function applyWithdrawal(pos: Position, baseOut: bigint, now: number): Position {
+  return { ...pos, size: pos.size > baseOut ? pos.size - baseOut : 0n, updatedAt: now };
+}

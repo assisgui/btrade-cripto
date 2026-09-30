@@ -127,3 +127,32 @@ describe('RiskManager', () => {
     expect(v.approved).toBe(false);
   });
 });
+
+describe('computeNow / assess', () => {
+  const E = 10n ** 18n;
+  it('reports sell reasons and pct to targets', () => {
+    const r = mk({ minTradeValue: 0, stopLossPct: 10 });
+    const n1 = r.assess(snap({ position: { size: 1n, avgEntryPrice: price * 0.9, realizedPnlQuote: 0, updatedAt: 0 } }));
+    expect(n1.sellReason).toBe('profit_target_reached');
+    expect(n1.sellAllowedNow).toBe(true);
+    const n2 = r.assess(snap());
+    expect(n2.sellReason).toBe('below_profit_target');
+    expect(n2.sellAllowedNow).toBe(false);
+    expect(n2.pctToProfitTarget).toBeGreaterThanOrEqual(1);
+    expect(n2.pctToStopLoss).toBeCloseTo(-10, 1);
+    const n3 = r.assess(snap({ position: { size: 1n, avgEntryPrice: price * 1.2, realizedPnlQuote: 0, updatedAt: 0 } }));
+    expect(n3.sellReason).toBe('stop_loss_active');
+    const n4 = r.assess(snap({ balances: { native: E, base: E, quote: 0n } }));
+    expect(n4.sellReason).toBe('no_base_available');
+    expect(n4.buyReason).toBe('no_quote_balance');
+  });
+  it('flags buckets below min and blocked info', () => {
+    const r = mk({ minTradeValue: 0.0005, maxTradeValue: 0.0004 }, [trade({ ts: NOW / 1000 - 100, realizedPnlQuote: -1 })]);
+    const n = r.assess(snap());
+    expect(n.tradeValueByBucket.buy.small.belowMin).toBe(true);
+    expect(n.tradeValueByBucket.sell.large.value).toBeLessThanOrEqual(0.0004 + 1e-9);
+    expect(n.blocked.cooldownSecLeft).toBe(200);
+    expect(n.blocked.dailyTradesLeft).toBe(4);
+    expect(n.blocked.dailyLossLimitHit).toBe(true);
+  });
+});

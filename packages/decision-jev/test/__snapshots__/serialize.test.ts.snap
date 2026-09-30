@@ -1,0 +1,122 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`serializeState > matches the expected structure 1`] = `
+{
+  "balances": {
+    "MON": 600,
+    "USDC": 7,
+  },
+  "buyPrice": 0.0201,
+  "constraints": {
+    "gasReserveNative": 10.5,
+    "minConfidence": 0.6,
+    "minProfitPctToSell": 1,
+    "note": "A sell is executed only if the price is at/above the profit target, or, when you choose sell, if it is at/below the stop-loss (stop-loss never forces a sell by itself). Otherwise it is vetoed. Native gas reserve is untouchable. See \`now\` for what is possible right now.",
+    "stopLossPct": 3,
+    "tradeSizePctOfAvailable": {
+      "large": 20,
+      "medium": 10,
+      "small": 5,
+    },
+  },
+  "gasCostNative": 0.02,
+  "indicators": {
+    "emaShortVsLongPct": 1.02,
+    "priceVsEmaLongPct": 1.52,
+    "priceVsEmaShortPct": 0.503,
+    "return1hPct": -0.4,
+    "return24hPct": 2,
+    "return5mPct": 0.1,
+    "rsi14": 55,
+    "timeframe": "EMA(9/21), RSI(14) and volatility use 5-minute candles",
+    "volatilityPer5mCandle": 0.0021,
+  },
+  "lastDecision": {
+    "action": "hold",
+    "at": 1799999000000,
+    "confidence": 0.7,
+  },
+  "now": {
+    "blocked": {
+      "cooldownSecLeft": 0,
+      "dailyLossLimitHit": false,
+      "dailyTradesLeft": 6,
+    },
+    "buyAllowedNow": true,
+    "buyReason": "ok",
+    "pctToProfitTarget": 1.234,
+    "pctToStopLoss": -12.1,
+    "sellAllowedNow": false,
+    "sellReason": "below_profit_target",
+    "tradeValueByBucket": {
+      "buy": {
+        "large": {
+          "belowMin": false,
+          "value": 1.4,
+        },
+        "medium": {
+          "belowMin": false,
+          "value": 0.7,
+        },
+        "small": {
+          "belowMin": true,
+          "value": 0.35,
+        },
+      },
+      "sell": {
+        "large": {
+          "belowMin": false,
+          "value": 6,
+        },
+        "medium": {
+          "belowMin": false,
+          "value": 3,
+        },
+        "small": {
+          "belowMin": false,
+          "value": 1.2,
+        },
+      },
+    },
+  },
+  "objective": "Maximize total portfolio value measured in USDC. Hold MON only when it is expected to outperform holding USDC; use sell to protect value and buy to re-enter.",
+  "portfolio": {
+    "MONPctOfValue": 63.16,
+    "USDCPctOfValue": 36.84,
+    "pnlPctVsInvested": 1.5,
+  },
+  "position": {
+    "avgEntryPrice": 0.0195,
+    "unrealizedPnlPct": 2.564,
+  },
+  "price": 0.02,
+  "priceImpactBps": {
+    "buy": 2,
+    "sell": 3,
+  },
+  "recentCloses": {
+    "unit": "% change of each past 5m close vs current price, oldest first",
+    "values": [
+      -2,
+      -1.5,
+      -1,
+      -1.5,
+      -0.5,
+      0,
+      0.5,
+      0,
+      -0.5,
+      -1,
+      -0.5,
+      0,
+    ],
+  },
+  "secondsSinceLastTrade": 4000,
+  "sellPrice": 0.0199,
+  "task": "Trading MON (base) against USDC (quote). buy = spend USDC to acquire MON; sell = sell MON for USDC. Price is USDC per MON.",
+  "usd": {
+    "MONUsd": 0.02,
+    "USDCUsd": 1,
+  },
+}
+`;

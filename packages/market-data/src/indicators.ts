@@ -71,5 +71,6 @@ export function computeIndicators(i: IndicatorInput): Indicators {
     emaShort: ema(closes, i.emaShort ?? 9),
     emaLong: ema(closes, i.emaLong ?? 21),
     rsi14: rsi(closes.length >= 15 ? closes : hourCloses, 14),
+    recentCloses: closes.slice(-12),
   };
 }

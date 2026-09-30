@@ -4,6 +4,7 @@ import {
   type IRiskManager, type IStorage, type MarketSnapshot, type Pair, type Trade,
 } from '@btrade/core';
 import type { ChangeDetector, SnapshotBuilder } from '@btrade/market-data';
+import { noActionReason } from '@btrade/risk';
 import { applyBuy, applySell } from '@btrade/storage';
 import { FlowTracker } from './FlowTracker.js';
 
@@ -117,7 +118,14 @@ export class TradingBot {
         log.debug({ reason: change.reason }, 'no meaningful change; skipping decision');
         return;
       }
-      const decision = await this.d.engine.decide(snap, { now: this.d.risk.assess(snap), pnlPctVsInvested: this.pnlPctVsInvested });
+      const now = this.d.risk.assess(snap);
+      const skip = noActionReason(now);
+      if (skip) {
+        // nothing could be approved: don't spend an engine call; not marking sent re-triggers once the block clears
+        log.debug({ trigger: change.reason, skip }, 'no trade possible; skipping decision');
+        return;
+      }
+      const decision = await this.d.engine.decide(snap, { now, pnlPctVsInvested: this.pnlPctVsInvested });
       this.d.detector.markSent(snap);
       this.d.storage.state.set('lastDecision', JSON.stringify({ action: decision.action, confidence: decision.confidence, at: snap.timestamp }));
       log.info({ trigger: change.reason, action: decision.action, size: decision.sizeBucket, confidence: decision.confidence, p: decision.probabilities }, 'decision');

@@ -137,3 +137,14 @@ export function computeNow(
     tradeValueByBucket: { buy, sell },
   };
 }
+
+export type NoActionReason = 'cooldown' | 'max_trades_per_day' | 'daily_loss_limit' | 'no_trade_allowed';
+
+/** Why no trade could be approved right now regardless of the decision (null = asking the engine is worthwhile). */
+export function noActionReason(now: NowState): NoActionReason | null {
+  if (now.blocked.cooldownSecLeft > 0) return 'cooldown';
+  if (now.blocked.dailyTradesLeft <= 0) return 'max_trades_per_day';
+  if (now.blocked.dailyLossLimitHit && now.sellReason !== 'stop_loss_active') return 'daily_loss_limit';
+  if (!now.sellAllowedNow && !now.buyAllowedNow) return 'no_trade_allowed';
+  return null;
+}

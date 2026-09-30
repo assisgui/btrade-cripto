@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Decision, MarketSnapshot, Quote, Token, Trade } from '@btrade/core';
-import { RiskManager, type RiskConfig } from '../src/index.js';
+import { noActionReason, RiskManager, type RiskConfig } from '../src/index.js';
 
 const base: Token = { symbol: 'MON', address: '0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A', decimals: 18, native: true };
 const quote: Token = { symbol: 'WBTC', address: '0x0555E30da8f98308EdB960aa94C0Db47230d2B9c', decimals: 8, native: false };
@@ -154,5 +154,27 @@ describe('computeNow / assess', () => {
     expect(n.blocked.cooldownSecLeft).toBe(200);
     expect(n.blocked.dailyTradesLeft).toBe(4);
     expect(n.blocked.dailyLossLimitHit).toBe(true);
+  });
+});
+
+describe('noActionReason', () => {
+  const base = {
+    sellAllowedNow: false, sellReason: 'below_profit_target', buyAllowedNow: true, buyReason: 'ok',
+    pctToProfitTarget: 1, pctToStopLoss: -2,
+    blocked: { cooldownSecLeft: 0, dailyTradesLeft: 10, dailyLossLimitHit: false },
+    tradeValueByBucket: {} as never,
+  } as const;
+  const mk = (o: Record<string, unknown> = {}, b: Record<string, unknown> = {}) =>
+    ({ ...base, ...o, blocked: { ...base.blocked, ...b } }) as unknown as Parameters<typeof noActionReason>[0];
+  it('asks the engine when a buy or sell is possible', () => {
+    expect(noActionReason(mk())).toBeNull();
+    expect(noActionReason(mk({ buyAllowedNow: false, sellAllowedNow: true, sellReason: 'profit_target_reached' }))).toBeNull();
+  });
+  it('skips on cooldown, daily trade cap, daily loss (unless stop-loss) and when nothing is allowed', () => {
+    expect(noActionReason(mk({}, { cooldownSecLeft: 30 }))).toBe('cooldown');
+    expect(noActionReason(mk({}, { dailyTradesLeft: 0 }))).toBe('max_trades_per_day');
+    expect(noActionReason(mk({}, { dailyLossLimitHit: true }))).toBe('daily_loss_limit');
+    expect(noActionReason(mk({ sellAllowedNow: true, sellReason: 'stop_loss_active' }, { dailyLossLimitHit: true }))).toBeNull();
+    expect(noActionReason(mk({ buyAllowedNow: false, buyReason: 'no_quote_balance' }))).toBe('no_trade_allowed');
   });
 });

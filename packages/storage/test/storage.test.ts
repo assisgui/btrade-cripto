@@ -49,11 +49,11 @@ describe('migration', () => {
       INSERT INTO trades (ts, side, mode, token_in, token_out, amount_in, amount_out, price) VALUES (1,'buy','paper','0x1','0x2','1','2',3);`);
     old.close();
     for (let i = 0; i < 2; i++) {
-      const s = new SqliteStorage(path);
+      const s = new SqliteStorage(path, { account: 'x' });
       expect(s.trades.last()?.valueUsd).toBeNull();
       s.close();
     }
-    const s = new SqliteStorage(path);
+    const s = new SqliteStorage(path, { account: 'x' });
     s.trades.insert({ ts: 2, side: 'sell', mode: 'paper', tokenIn: '0x02', tokenOut: '0x01', amountIn: 1n, amountOut: 1n, price: 1, realizedPnlQuote: 0.5, txHash: null, paper: true, valueUsd: 10, gasUsd: 0.1, realizedPnlUsd: 5 });
     expect(s.trades.last()?.realizedPnlUsd).toBe(5);
     s.portfolio.insert({ ts: 1, balanceBase: 1, balanceQuote: 2, valueQuote: 3, valueUsd: null, hodlValueQuote: 3, hodlValueUsd: null });

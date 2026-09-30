@@ -22,7 +22,7 @@ describe('flows storage', () => {
     old.exec("CREATE TABLE bot_state (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO bot_state VALUES ('hodl_init:live','{}');");
     old.close();
     for (let i = 0; i < 2; i++) {
-      const s = new SqliteStorage(path);
+      const s = new SqliteStorage(path, { account: 'x' });
       expect(s.flows.count()).toBe(i);
       s.flows.insert({ ts: 1, asset: 'quote', amount: 1, price: 1, valueQuote: 1, valueUsd: 1 });
       expect(s.state.get('hodl_init:live')).toBe('{}');

@@ -1,6 +1,6 @@
 import { pino } from 'pino';
 import { isAddress } from 'viem';
-import { toUnits, type Address, type IDexAdapter, type Token, type ChainConfig } from '@btrade/core';
+import { accountKey, toUnits, type Address, type IDexAdapter, type Token, type ChainConfig } from '@btrade/core';
 import { EvmChainAdapter, getChainConfig } from '@btrade/chain-evm';
 import { PaperDexAdapter, V3Adapter, V3_FEE_TIERS } from '@btrade/dex-uniswap-v3';
 import { ChangeDetector, GeckoTerminalProvider, OnChainUsdOracle, SnapshotBuilder } from '@btrade/market-data';
@@ -60,7 +60,11 @@ async function main() {
   const base = await resolveToken(c.BASE_TOKEN, chain, chainCfg);
   const quote = await resolveToken(c.QUOTE_TOKEN, chain, chainCfg);
   const pair = { base, quote };
-  const storage = new SqliteStorage(c.DB_PATH);
+  if (!paper && !chain.address) throw new Error('PRIVATE_KEY is required outside paper mode');
+  const account = accountKey(paper ? undefined : chain.address, chainCfg.chainId, pair);
+  const storage = new SqliteStorage(c.DB_PATH, { account });
+  const mig = storage.migration;
+  if (mig.stateKeys || mig.rebuilt.length || Object.keys(mig.rows).length) log.info({ ...mig }, 'migrated legacy rows to account');
 
   const realDex = buildDex(c, chain, chainCfg);
   const gasReserve = toUnits(c.GAS_RESERVE_NATIVE, chainCfg.nativeDecimals);
@@ -111,7 +115,7 @@ async function main() {
       minConfidence: c.MIN_CONFIDENCE, gasReserveNative: gasReserve, sizePct, minProfitPct: c.MIN_PROFIT_PCT,
       stopLossPct: c.STOP_LOSS_PCT, maxSlippageBps: c.MAX_SLIPPAGE_BPS, maxPriceImpactBps: c.MAX_PRICE_IMPACT_BPS,
       minTradeValue: c.MIN_TRADE_VALUE, maxTradeValue: c.MAX_TRADE_VALUE, maxGasCostPct: c.MAX_GAS_COST_PCT, tradeCooldownSec: c.TRADE_COOLDOWN_SEC,
-      maxTradesPerDay: c.MAX_TRADES_PER_DAY, maxDailyLossPct: c.MAX_DAILY_LOSS_PCT,
+      maxTradesPerDay: c.MAX_TRADES_PER_DAY, maxDailyLossPct: c.MAX_DAILY_LOSS_PCT, sameSideStepPct: c.SAME_SIDE_STEP_PCT,
     },
     storage.trades,
   );
@@ -136,7 +140,7 @@ async function main() {
     { pollIntervalSec: c.POLL_INTERVAL_SEC, gasReserve, initialCostBasis: c.INITIAL_COST_BASIS, maxTicks: c.MAX_TICKS, portfolioSnapshotSec: c.PORTFOLIO_SNAPSHOT_SEC, flowToleranceNative: c.FLOW_TOLERANCE_NATIVE },
   );
 
-  log.info({ mode: c.MODE, chain: `${chainCfg.name}/${chainCfg.network}`, dex: dex.name, base: base.symbol, quote: quote.symbol, wallet: chain.address ?? '(none)' }, 'btrade starting');
+  log.info({ mode: c.MODE, chain: `${chainCfg.name}/${chainCfg.network}`, dex: dex.name, base: base.symbol, quote: quote.symbol, wallet: chain.address ?? '(none)', account }, 'btrade starting');
   let stopping = false;
   const shutdown = async (sig: string) => {
     if (stopping) return;

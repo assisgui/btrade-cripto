@@ -1,6 +1,6 @@
 import type { Decision, IRiskManager, ITradeRepository, MarketSnapshot, NowState, QuoteFn, RiskVerdict, Token } from '@btrade/core';
 import { toNumber } from '@btrade/core';
-import { bucketAmountIn, computeNow, cooldownSecLeft, dailyLoss, gasInQuote, sellRule, type RiskConfig } from './limits.js';
+import { bucketAmountIn, computeNow, cooldownSecLeft, dailyLoss, gasInQuote, sellRule, stepRule, type RiskConfig } from './limits.js';
 
 export type { RiskConfig };
 
@@ -15,7 +15,7 @@ export class RiskManager implements IRiskManager {
     const nowSec = this.now() / 1000;
     const recentTrades = this.trades.since(nowSec - 86_400);
     const last = recentTrades.length ? recentTrades[recentTrades.length - 1] : this.trades.last();
-    return computeNow(this.cfg, s, { recentTrades, lastTradeTs: last?.ts ?? null, nowSec });
+    return computeNow(this.cfg, s, { recentTrades, lastTradeTs: last?.ts ?? null, nowSec, lastTrade: last ?? null });
   }
 
   async evaluate(decision: Decision, s: MarketSnapshot, quoteFn: QuoteFn): Promise<RiskVerdict> {
@@ -79,6 +79,13 @@ export class RiskManager implements IRiskManager {
           reasons.push(`sell price ${sellPrice.toPrecision(6)} < required ${r.required.toPrecision(6)} (entry ${entry.toPrecision(6)} + profit + gas/unit)`);
         }
       }
+    }
+    const execPrice = isBuy
+      ? toNumber(amountIn, quote.decimals) / toNumber(q.amountOut, base.decimals)
+      : toNumber(q.amountOut, quote.decimals) / toNumber(amountIn, base.decimals);
+    const step = stepRule(c, isBuy ? 'buy' : 'sell', execPrice, last ?? null, stopLoss);
+    if (!step.ok && step.next !== null) {
+      reasons.push(`price step: last ${last!.side} @ ${last!.price.toPrecision(6)}, next ${isBuy ? 'buy' : 'sell'} needs ${isBuy ? '<=' : '>='} ${step.next.toPrecision(6)} (now ${execPrice.toPrecision(6)})`);
     }
     if (dailyLossHit && !stopLoss) reasons.push(`daily loss ${lossPct.toFixed(2)}% >= max ${c.maxDailyLossPct}%`);
 

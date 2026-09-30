@@ -19,6 +19,8 @@ export interface RiskConfig {
   tradeCooldownSec: number;
   maxTradesPerDay: number;
   maxDailyLossPct: number;
+  /** a same-side trade needs the price to move this % beyond the last one (sell: above, buy: below). 0 disables */
+  sameSideStepPct: number;
 }
 
 const BUCKETS: SizeBucket[] = ['small', 'medium', 'large'];
@@ -85,9 +87,27 @@ export function sellRule(cfg: RiskConfig, entry: number, sellPrice: number, gasQ
 
 const round = (n: number, d: number) => Number(n.toFixed(d));
 
+export interface StepRule { ok: boolean; next: number | null }
+
+/**
+ * Ladder between same-side trades: after a sell, the next sell needs price >= last*(1+step)
+ * (or, with stop-loss active, <= last*(1-step)); after a buy, the next buy needs price <= last*(1-step).
+ * An opposite-side last trade (or none) imposes nothing. `next` is the price that unlocks the step.
+ */
+export function stepRule(cfg: RiskConfig, side: 'buy' | 'sell', price: number, last: Pick<Trade, 'side' | 'price'> | null, stopLossActive = false): StepRule {
+  const step = cfg.sameSideStepPct / 100;
+  if (step <= 0 || !last || last.side !== side || !(last.price > 0)) return { ok: true, next: null };
+  if (side === 'sell') {
+    const up = last.price * (1 + step);
+    return { ok: price >= up || (stopLossActive && price <= last.price * (1 - step)), next: up };
+  }
+  const down = last.price * (1 - step);
+  return { ok: price <= down, next: down };
+}
+
 /** What is possible right now. Pure; RiskManager.assess feeds it the stored trades. */
 export function computeNow(
-  cfg: RiskConfig, s: MarketSnapshot, ctx: { recentTrades: Trade[]; lastTradeTs: number | null; nowSec: number },
+  cfg: RiskConfig, s: MarketSnapshot, ctx: { recentTrades: Trade[]; lastTradeTs: number | null; nowSec: number; lastTrade?: Pick<Trade, 'side' | 'price'> | null },
 ): NowState {
   const { base, quote } = s.pair;
   const valuesFor = (isBuy: boolean): BucketValues => {
@@ -104,7 +124,11 @@ export function computeNow(
   const sell = valuesFor(false);
 
   const quoteAvail = availableAfterReserve(s.balances.quote, quote, cfg.gasReserveNative);
-  const buyReason: NowState['buyReason'] = quoteAvail <= 0n ? 'no_quote_balance' : BUCKETS.every((b) => buy[b].belowMin) ? 'below_min_trade_value' : 'ok';
+  const last = ctx.lastTrade ?? null;
+  const buyPx = s.priceBuy ?? s.price;
+  const buyStep = stepRule(cfg, 'buy', buyPx, last);
+  let buyReason: NowState['buyReason'] = quoteAvail <= 0n ? 'no_quote_balance' : BUCKETS.every((b) => buy[b].belowMin) ? 'below_min_trade_value' : 'ok';
+  if (buyReason === 'ok' && !buyStep.ok) buyReason = 'waiting_price_step';
 
   // sell rule evaluated at the probe (medium) size, like the snapshot's executable sell price
   const sellPx = s.priceSell ?? s.price;
@@ -121,6 +145,9 @@ export function computeNow(
     pctToStopLoss = r.stopPrice === null ? null : round((r.stopPrice / sellPx - 1) * 100, 3);
     if (medIn > 0n) sellReason = r.targetReached ? 'profit_target_reached' : r.stopLoss ? 'stop_loss_active' : 'below_profit_target';
   }
+  const sellStep = stepRule(cfg, 'sell', sellPx, last, sellReason === 'stop_loss_active');
+  if ((sellReason === 'profit_target_reached' || sellReason === 'stop_loss_active') && !sellStep.ok) sellReason = 'waiting_price_step';
+  const pctTo = (target: number | null, px: number) => (target === null || !(px > 0) ? null : round((target / px - 1) * 100, 3));
 
   return {
     sellAllowedNow: sellReason === 'profit_target_reached' || sellReason === 'stop_loss_active',
@@ -133,6 +160,10 @@ export function computeNow(
       cooldownSecLeft: cooldownSecLeft(cfg, ctx.lastTradeTs, ctx.nowSec),
       dailyTradesLeft: Math.max(0, cfg.maxTradesPerDay - ctx.recentTrades.length),
       dailyLossLimitHit: dailyLoss(cfg, ctx.recentTrades, s).hit,
+    },
+    priceStep: {
+      stepPct: cfg.sameSideStepPct, lastSide: last?.side ?? null, lastPrice: last?.price ?? null,
+      pctToNextSell: pctTo(sellStep.next, sellPx), pctToNextBuy: pctTo(buyStep.next, buyPx),
     },
     tradeValueByBucket: { buy, sell },
   };

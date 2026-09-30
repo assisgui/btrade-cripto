@@ -183,6 +183,7 @@ export class TradingBot {
       realizedPnlUsd: qUsd === null ? null : realized * qUsd,
     };
     this.d.storage.trades.insert(trade);
+    this.d.detector.acknowledgeOwnTrade();
     this.d.storage.decisions.log({ ts: snap.timestamp, snapshot: snap, decision, outcome: `executed ${trade.side} @ ${price}` });
     this.d.log.info({ side: trade.side, price, realizedPnlQuote: realized, txHash: res.txHash, paper: res.paper }, 'trade executed');
     await this.d.notifier.notify({ type: 'trade', trade });

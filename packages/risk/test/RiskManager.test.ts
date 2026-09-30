@@ -10,7 +10,7 @@ const NOW = 1_800_000_000_000;
 const cfg: RiskConfig = {
   minConfidence: 0.6, gasReserveNative: 1n * E18, sizePct: { small: 10, medium: 25, large: 50 },
   minProfitPct: 1, stopLossPct: 10, maxSlippageBps: 100, maxPriceImpactBps: 100, minTradeValue: 0.00001, maxTradeValue: 0,
-  maxGasCostPct: 5, tradeCooldownSec: 300, maxTradesPerDay: 5, maxDailyLossPct: 5,
+  maxGasCostPct: 5, tradeCooldownSec: 300, maxTradesPerDay: 5, maxDailyLossPct: 5, sameSideStepPct: 0,
 };
 
 const price = 0.000001; // WBTC per MON
@@ -176,5 +176,34 @@ describe('noActionReason', () => {
     expect(noActionReason(mk({}, { dailyLossLimitHit: true }))).toBe('daily_loss_limit');
     expect(noActionReason(mk({ sellAllowedNow: true, sellReason: 'stop_loss_active' }, { dailyLossLimitHit: true }))).toBeNull();
     expect(noActionReason(mk({ buyAllowedNow: false, buyReason: 'no_quote_balance' }))).toBe('no_trade_allowed');
+  });
+});
+
+describe('same-side price step (ladder)', () => {
+  const t = (side: 'buy' | 'sell', px: number): Trade => ({
+    ts: NOW / 1000 - 10_000, side, mode: 'live', tokenIn: '0x1', tokenOut: '0x2', amountIn: 1n, amountOut: 1n,
+    price: px, realizedPnlQuote: 0, txHash: null, paper: false,
+  });
+  const gain = { position: { size: 1000n * E18, avgEntryPrice: price * 0.9, realizedPnlQuote: 0, updatedAt: 0 } };
+  const quoteAt = (px: number) => async (_a: Token, _b: Token, amountIn: bigint): Promise<Quote> =>
+    ({ amountIn, amountOut: BigInt(Math.round(Number(amountIn) / 1e18 * px * 1e8)), priceImpactBps: 1, fee: 500, route: [] }) as Quote;
+  it('blocks a second sell until the price is step% above the last sell', async () => {
+    const blocked = await mk({ sameSideStepPct: 0.5 }, [t('sell', price * 1.02)]).evaluate(dec('sell'), snap(gain), quoteAt(price));
+    expect(blocked.reasons.join()).toMatch(/price step/);
+    const ok = await mk({ sameSideStepPct: 0.5 }, [t('sell', price * 0.99)]).evaluate(dec('sell'), snap(gain), quoteAt(price));
+    expect(ok.reasons.join()).not.toMatch(/price step/);
+  });
+  it('blocks a second buy until the price is step% below the last buy; opposite side imposes nothing', async () => {
+    const buyQuote = async (_a: Token, _b: Token, amountIn: bigint): Promise<Quote> =>
+      ({ amountIn, amountOut: BigInt(Math.round(Number(amountIn) / 1e8 / price * 1e18)), priceImpactBps: 1, fee: 500, route: [] }) as Quote;
+    expect((await mk({ sameSideStepPct: 0.5 }, [t('buy', price)]).evaluate(dec('buy'), snap(), buyQuote)).reasons.join()).toMatch(/price step/);
+    expect((await mk({ sameSideStepPct: 0.5 }, [t('buy', price * 1.01)]).evaluate(dec('buy'), snap(), buyQuote)).reasons.join()).not.toMatch(/price step/);
+    expect((await mk({ sameSideStepPct: 0.5 }, [t('sell', price)]).evaluate(dec('buy'), snap(), buyQuote)).reasons.join()).not.toMatch(/price step/);
+  });
+  it('assess reports waiting_price_step so the engine is skipped', () => {
+    const now = mk({ sameSideStepPct: 0.5, tradeCooldownSec: 0 }, [t('sell', price * 1.02)]).assess(snap({ ...gain, balances: { native: 1001n * E18, base: 1001n * E18, quote: 0n } }));
+    expect(now.sellReason).toBe('waiting_price_step');
+    expect(now.priceStep.pctToNextSell).toBeCloseTo(2.51, 1);
+    expect(noActionReason(now)).toBe('no_trade_allowed');
   });
 });

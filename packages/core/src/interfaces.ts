@@ -162,5 +162,8 @@ export interface IStorage {
 }
 
 export const pairKey = (p: Pair): string => `${p.base.symbol}/${p.quote.symbol}`;
+/** Scope of all persisted data: `${wallet}:${chainId}:${pairKey}`; wallet = lowercase address, or 'paper' in paper mode. */
+export const accountKey = (wallet: string | undefined, chainId: number, pair: Pair): string =>
+  `${(wallet ?? 'paper').toLowerCase()}:${chainId}:${pairKey(pair)}`;
 export const balanceKey = (t: Token): string => (t.native ? 'native' : t.address.toLowerCase());
 export type { Position };

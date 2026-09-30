@@ -8,7 +8,31 @@ if (path !== ':memory:' && !existsSync(path)) {
   console.error(`No DB at ${path}`);
   process.exit(1);
 }
-const s = new SqliteStorage(path);
+const probe = new SqliteStorage(path); // no account: nothing is assigned
+const accounts = probe.accounts().filter((a) => a.account !== 'default');
+const legacy = probe.hasLegacyData();
+probe.close();
+if (legacy && !process.env.ACCOUNT) {
+  console.error('This DB has data not yet assigned to a wallet account. Start the bot once (it adopts the data for its wallet),');
+  console.error('or set ACCOUNT=<wallet>:<chainId>:<BASE/QUOTE> explicitly to assign it.');
+  process.exit(1);
+}
+if (process.argv.includes('--accounts')) {
+  console.log('account                                                          trades  flows');
+  for (const a of accounts) console.log(`${a.account.padEnd(64)} ${String(a.trades).padEnd(7)} ${a.flows}`);
+  if (!accounts.length) console.log('(no accounts)');
+  process.exit(0);
+}
+let account = process.env.ACCOUNT;
+if (!account) {
+  if (accounts.length !== 1) {
+    console.error(accounts.length ? 'Several accounts in this DB; set ACCOUNT=<key> (see `pnpm report --accounts`):' : 'No accounts in this DB (start the bot once so it migrates legacy rows, or set ACCOUNT).');
+    for (const a of accounts) console.error(`  ${a.account}  (${a.trades} trades)`);
+    process.exit(1);
+  }
+  account = accounts[0]!.account;
+}
+const s = new SqliteStorage(path, { account });
 const n = (v: number | null | undefined, d = 6) => (v === null || v === undefined ? 'n/a' : v.toFixed(d));
 const p = (v: number | null) => (v === null ? 'n/a' : `${v >= 0 ? '+' : ''}${v.toFixed(3)}%`);
 
@@ -28,7 +52,7 @@ const realizedQ = trades.reduce((a, t) => a + t.realizedPnlQuote, 0);
 const realizedUsdTrades = trades.filter((t) => t.realizedPnlUsd !== null && t.realizedPnlUsd !== undefined);
 const realizedUsd = realizedUsdTrades.length ? realizedUsdTrades.reduce((a, t) => a + (t.realizedPnlUsd ?? 0), 0) : null;
 
-console.log(`== btrade report (${path}) ==`);
+console.log(`== btrade report (${path}) ==\naccount: ${account}`);
 if (!inits.length || !last) {
   console.log('No portfolio data yet (run the bot at least one tick).');
 }

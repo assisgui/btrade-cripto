@@ -46,6 +46,13 @@ exports[`serializeState > matches the expected structure 1`] = `
     "buyReason": "ok",
     "pctToProfitTarget": 1.234,
     "pctToStopLoss": -12.1,
+    "priceStep": {
+      "lastPrice": 0.0201,
+      "lastSide": "sell",
+      "pctToNextBuy": null,
+      "pctToNextSell": 1.5,
+      "stepPct": 0.5,
+    },
     "sellAllowedNow": false,
     "sellReason": "below_profit_target",
     "tradeValueByBucket": {

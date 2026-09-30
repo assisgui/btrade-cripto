@@ -74,15 +74,19 @@ export class V3Adapter implements IDexAdapter {
 
   async quote(tokenIn: Token, tokenOut: Token, amountIn: bigint): Promise<Quote> {
     const pool = await this.getPoolInfo(tokenIn, tokenOut);
-    const { result } = await this.pc.simulateContract({
-      address: this.addrs.quoter,
-      abi: quoterV2Abi,
-      functionName: 'quoteExactInputSingle',
-      args: [{ tokenIn: tokenIn.address, tokenOut: tokenOut.address, amountIn, fee: pool.fee, sqrtPriceLimitX96: 0n }],
-    });
+    // the pool choice is cached, but the spot price must be fresh: a cached slot0 turns market moves into fake "impact"
+    const [{ result }, slot0] = await Promise.all([
+      this.pc.simulateContract({
+        address: this.addrs.quoter,
+        abi: quoterV2Abi,
+        functionName: 'quoteExactInputSingle',
+        args: [{ tokenIn: tokenIn.address, tokenOut: tokenOut.address, amountIn, fee: pool.fee, sqrtPriceLimitX96: 0n }],
+      }),
+      this.pc.readContract({ address: pool.address, abi: poolAbi, functionName: 'slot0' }),
+    ]);
     const [amountOut, sqrtAfter, , gasEstimate] = result;
     // price ∝ sqrtPrice^2; use ratio of before/after (spot, excludes fee) for impact.
-    const ratio = Number(sqrtAfter) / Number(pool.sqrtPriceX96);
+    const ratio = Number(sqrtAfter) / Number(slot0[0]);
     const priceImpactBps = Math.abs(ratio * ratio - 1) * 10_000;
     return {
       amountIn,

@@ -10,7 +10,7 @@ const NOW = 1_800_000_000_000;
 const cfg: RiskConfig = {
   minConfidence: 0.6, gasReserveNative: 1n * E18, sizePct: { small: 10, medium: 25, large: 50 },
   minProfitPct: 1, stopLossPct: 10, maxSlippageBps: 100, maxPriceImpactBps: 100, minTradeValue: 0.00001, maxTradeValue: 0,
-  maxGasCostPct: 5, tradeCooldownSec: 300, maxTradesPerDay: 5, maxDailyLossPct: 5, sameSideStepPct: 0,
+  maxGasCostPct: 5, tradeCooldownSec: 300, maxTradesPerDay: 5, maxDailyLossPct: 5, sameSideStepPct: 0, rebuyDiscountPct: 0,
 };
 
 const price = 0.000001; // WBTC per MON
@@ -205,5 +205,30 @@ describe('same-side price step (ladder)', () => {
     expect(now.sellReason).toBe('waiting_price_step');
     expect(now.priceStep.pctToNextSell).toBeCloseTo(2.51, 1);
     expect(noActionReason(now)).toBe('no_trade_allowed');
+  });
+});
+
+describe('rebuy below last sell', () => {
+  const t = (side: 'buy' | 'sell', px: number, ts = NOW / 1000 - 10_000): Trade => ({
+    ts, side, mode: 'live', tokenIn: '0x1', tokenOut: '0x2', amountIn: 1n, amountOut: 1n, price: px, realizedPnlQuote: 0, txHash: null, paper: false,
+  });
+  const buyQuote = async (_a: Token, _b: Token, amountIn: bigint): Promise<Quote> =>
+    ({ amountIn, amountOut: BigInt(Math.round(Number(amountIn) / 1e8 / price * 1e18)), priceImpactBps: 1, fee: 500, route: [] }) as Quote;
+  it('vetoes a buy above lastSell*(1-discount) and allows it below', async () => {
+    const hi = await mk({ rebuyDiscountPct: 0.5 }, [t('sell', price * 1.003)]).evaluate(dec('buy'), snap(), buyQuote);
+    expect(hi.reasons.join()).toMatch(/rebuy/);
+    const lo = await mk({ rebuyDiscountPct: 0.5 }, [t('sell', price * 1.01)]).evaluate(dec('buy'), snap(), buyQuote);
+    expect(lo.reasons.join()).not.toMatch(/rebuy/);
+  });
+  it('no previous sell = no constraint; the reference is the last SELL even after a later buy', async () => {
+    expect((await mk({ rebuyDiscountPct: 0.5 }, []).evaluate(dec('buy'), snap(), buyQuote)).reasons.join()).not.toMatch(/rebuy/);
+    const trades = [t('sell', price * 1.001, NOW / 1000 - 20_000), t('buy', price * 1.5)];
+    expect((await mk({ rebuyDiscountPct: 0.5 }, trades).evaluate(dec('buy'), snap(), buyQuote)).reasons.join()).toMatch(/rebuy/);
+  });
+  it('assess exposes the rebuy target and above_rebuy_target', () => {
+    const now = mk({ rebuyDiscountPct: 0.5, tradeCooldownSec: 0 }, [t('sell', price)]).assess(snap());
+    expect(now.buyReason).toBe('above_rebuy_target');
+    expect(now.rebuy.targetPrice).toBeCloseTo(price * 0.995, 12);
+    expect(now.rebuy.pctToRebuyTarget).toBeCloseTo(-0.5, 2);
   });
 });

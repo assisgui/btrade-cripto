@@ -11,7 +11,7 @@ exports[`serializeState > matches the expected structure 1`] = `
     "gasReserveNative": 10.5,
     "minConfidence": 0.6,
     "minProfitPctToSell": 1,
-    "note": "A sell is executed only if the price is at/above the profit target, or, when you choose sell, if it is at/below the stop-loss (stop-loss never forces a sell by itself). Otherwise it is vetoed. Native gas reserve is untouchable. See \`now\` for what is possible right now.",
+    "note": "A sell is executed only if the price is at/above the profit target, or, when you choose sell, if it is at/below the stop-loss (stop-loss never forces a sell by itself). A buy is executed only if the price is at least the rebuy discount below the last sell (see now.rebuy). Otherwise it is vetoed. Native gas reserve is untouchable. See \`now\` for what is possible right now.",
     "stopLossPct": 3,
     "tradeSizePctOfAvailable": {
       "large": 20,
@@ -52,6 +52,12 @@ exports[`serializeState > matches the expected structure 1`] = `
       "pctToNextBuy": null,
       "pctToNextSell": 1.5,
       "stepPct": 0.5,
+    },
+    "rebuy": {
+      "discountPct": 0.5,
+      "lastSellPrice": 0.0201,
+      "pctToRebuyTarget": -0.4,
+      "targetPrice": 0.0199995,
     },
     "sellAllowedNow": false,
     "sellReason": "below_profit_target",

@@ -158,13 +158,15 @@ export interface NowState {
   sellAllowedNow: boolean;
   sellReason: SellReason;
   buyAllowedNow: boolean;
-  buyReason: 'ok' | 'no_quote_balance' | 'below_min_trade_value' | 'waiting_price_step';
+  buyReason: 'ok' | 'no_quote_balance' | 'below_min_trade_value' | 'waiting_price_step' | 'above_rebuy_target';
   /** % the executable sell price must move to reach the profit target (positive = needs to rise) */
   pctToProfitTarget: number | null;
   /** % the sell price must move to reach the stop-loss (negative = needs to fall); null when disabled */
   pctToStopLoss: number | null;
   blocked: { cooldownSecLeft: number; dailyTradesLeft: number; dailyLossLimitHit: boolean };
   /** same-side ladder: another sell needs the price >= step above the last sell (another buy: below the last buy) */
+  /** buy-back: a buy needs the price >= discountPct below the last sell (no sell yet = no constraint) */
+  rebuy: { discountPct: number; lastSellPrice: number | null; targetPrice: number | null; pctToRebuyTarget: number | null };
   priceStep: { stepPct: number; lastSide: 'buy' | 'sell' | null; lastPrice: number | null; pctToNextSell: number | null; pctToNextBuy: number | null };
   tradeValueByBucket: { buy: BucketValues; sell: BucketValues };
 }

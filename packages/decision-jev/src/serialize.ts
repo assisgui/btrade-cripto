@@ -62,7 +62,7 @@ export function serializeState(s: MarketSnapshot, c: RiskConstraintsForModel, ct
       gasReserveNative: c.gasReserveNative,
       minConfidence: c.minConfidence,
       tradeSizePctOfAvailable: c.sizePct,
-      note: 'A sell is executed only if the price is at/above the profit target, or, when you choose sell, if it is at/below the stop-loss (stop-loss never forces a sell by itself). Otherwise it is vetoed. Native gas reserve is untouchable. See `now` for what is possible right now.',
+      note: 'A sell is executed only if the price is at/above the profit target, or, when you choose sell, if it is at/below the stop-loss (stop-loss never forces a sell by itself). A buy is executed only if the price is at least the rebuy discount below the last sell (see now.rebuy). Otherwise it is vetoed. Native gas reserve is untouchable. See `now` for what is possible right now.',
     },
   };
 }

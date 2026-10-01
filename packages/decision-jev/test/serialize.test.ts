@@ -20,6 +20,7 @@ const snap: MarketSnapshot = {
 const now: NowState = {
   sellAllowedNow: false, sellReason: 'below_profit_target', buyAllowedNow: true, buyReason: 'ok', pctToProfitTarget: 1.234, pctToStopLoss: -12.1,
   blocked: { cooldownSecLeft: 0, dailyTradesLeft: 6, dailyLossLimitHit: false },
+  rebuy: { discountPct: 0.5, lastSellPrice: 0.0201, targetPrice: 0.0199995, pctToRebuyTarget: -0.4 },
   priceStep: { stepPct: 0.5, lastSide: 'sell', lastPrice: 0.0201, pctToNextSell: 1.5, pctToNextBuy: null },
   tradeValueByBucket: {
     buy: { small: { value: 0.35, belowMin: true }, medium: { value: 0.7, belowMin: false }, large: { value: 1.4, belowMin: false } },

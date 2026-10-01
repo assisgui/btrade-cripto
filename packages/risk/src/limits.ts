@@ -21,6 +21,8 @@ export interface RiskConfig {
   maxDailyLossPct: number;
   /** a same-side trade needs the price to move this % beyond the last one (sell: above, buy: below). 0 disables */
   sameSideStepPct: number;
+  /** a buy needs the price at least this % below the last sell (buy back cheaper). 0 disables */
+  rebuyDiscountPct: number;
 }
 
 const BUCKETS: SizeBucket[] = ['small', 'medium', 'large'];
@@ -89,6 +91,14 @@ const round = (n: number, d: number) => Number(n.toFixed(d));
 
 export interface StepRule { ok: boolean; next: number | null }
 
+/** Buy back cheaper: with a previous sell, a buy needs price <= lastSell*(1-discount). `target` unlocks it. */
+export function rebuyRule(cfg: RiskConfig, buyPrice: number, lastSell: Pick<Trade, 'price'> | null): { ok: boolean; target: number | null } {
+  const d = cfg.rebuyDiscountPct / 100;
+  if (d <= 0 || !lastSell || !(lastSell.price > 0)) return { ok: true, target: null };
+  const target = lastSell.price * (1 - d);
+  return { ok: buyPrice <= target, target };
+}
+
 /**
  * Ladder between same-side trades: after a sell, the next sell needs price >= last*(1+step)
  * (or, with stop-loss active, <= last*(1-step)); after a buy, the next buy needs price <= last*(1-step).
@@ -107,7 +117,7 @@ export function stepRule(cfg: RiskConfig, side: 'buy' | 'sell', price: number, l
 
 /** What is possible right now. Pure; RiskManager.assess feeds it the stored trades. */
 export function computeNow(
-  cfg: RiskConfig, s: MarketSnapshot, ctx: { recentTrades: Trade[]; lastTradeTs: number | null; nowSec: number; lastTrade?: Pick<Trade, 'side' | 'price'> | null },
+  cfg: RiskConfig, s: MarketSnapshot, ctx: { recentTrades: Trade[]; lastTradeTs: number | null; nowSec: number; lastTrade?: Pick<Trade, 'side' | 'price'> | null; lastSell?: Pick<Trade, 'price'> | null },
 ): NowState {
   const { base, quote } = s.pair;
   const valuesFor = (isBuy: boolean): BucketValues => {
@@ -128,6 +138,8 @@ export function computeNow(
   const buyPx = s.priceBuy ?? s.price;
   const buyStep = stepRule(cfg, 'buy', buyPx, last);
   let buyReason: NowState['buyReason'] = quoteAvail <= 0n ? 'no_quote_balance' : BUCKETS.every((b) => buy[b].belowMin) ? 'below_min_trade_value' : 'ok';
+  const rebuy = rebuyRule(cfg, buyPx, ctx.lastSell ?? null);
+  if (buyReason === 'ok' && !rebuy.ok) buyReason = 'above_rebuy_target';
   if (buyReason === 'ok' && !buyStep.ok) buyReason = 'waiting_price_step';
 
   // sell rule evaluated at the probe (medium) size, like the snapshot's executable sell price
@@ -160,6 +172,10 @@ export function computeNow(
       cooldownSecLeft: cooldownSecLeft(cfg, ctx.lastTradeTs, ctx.nowSec),
       dailyTradesLeft: Math.max(0, cfg.maxTradesPerDay - ctx.recentTrades.length),
       dailyLossLimitHit: dailyLoss(cfg, ctx.recentTrades, s).hit,
+    },
+    rebuy: {
+      discountPct: cfg.rebuyDiscountPct, lastSellPrice: ctx.lastSell?.price ?? null, targetPrice: rebuy.target,
+      pctToRebuyTarget: pctTo(rebuy.target, buyPx),
     },
     priceStep: {
       stepPct: cfg.sameSideStepPct, lastSide: last?.side ?? null, lastPrice: last?.price ?? null,

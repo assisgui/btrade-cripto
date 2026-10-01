@@ -115,7 +115,7 @@ async function main() {
       minConfidence: c.MIN_CONFIDENCE, gasReserveNative: gasReserve, sizePct, minProfitPct: c.MIN_PROFIT_PCT,
       stopLossPct: c.STOP_LOSS_PCT, maxSlippageBps: c.MAX_SLIPPAGE_BPS, maxPriceImpactBps: c.MAX_PRICE_IMPACT_BPS,
       minTradeValue: c.MIN_TRADE_VALUE, maxTradeValue: c.MAX_TRADE_VALUE, maxGasCostPct: c.MAX_GAS_COST_PCT, tradeCooldownSec: c.TRADE_COOLDOWN_SEC,
-      maxTradesPerDay: c.MAX_TRADES_PER_DAY, maxDailyLossPct: c.MAX_DAILY_LOSS_PCT, sameSideStepPct: c.SAME_SIDE_STEP_PCT,
+      maxTradesPerDay: c.MAX_TRADES_PER_DAY, maxDailyLossPct: c.MAX_DAILY_LOSS_PCT, sameSideStepPct: c.SAME_SIDE_STEP_PCT, rebuyDiscountPct: c.REBUY_DISCOUNT_PCT,
     },
     storage.trades,
   );

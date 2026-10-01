@@ -1,6 +1,6 @@
-import type { Decision, IRiskManager, ITradeRepository, MarketSnapshot, NowState, QuoteFn, RiskVerdict, Token } from '@btrade/core';
+import type { Decision, IRiskManager, ITradeRepository, MarketSnapshot, NowState, QuoteFn, RiskVerdict, Token, Trade } from '@btrade/core';
 import { toNumber } from '@btrade/core';
-import { bucketAmountIn, computeNow, cooldownSecLeft, dailyLoss, gasInQuote, sellRule, stepRule, type RiskConfig } from './limits.js';
+import { bucketAmountIn, computeNow, cooldownSecLeft, dailyLoss, gasInQuote, rebuyRule, sellRule, stepRule, type RiskConfig } from './limits.js';
 
 export type { RiskConfig };
 
@@ -15,7 +15,11 @@ export class RiskManager implements IRiskManager {
     const nowSec = this.now() / 1000;
     const recentTrades = this.trades.since(nowSec - 86_400);
     const last = recentTrades.length ? recentTrades[recentTrades.length - 1] : this.trades.last();
-    return computeNow(this.cfg, s, { recentTrades, lastTradeTs: last?.ts ?? null, nowSec, lastTrade: last ?? null });
+    return computeNow(this.cfg, s, { recentTrades, lastTradeTs: last?.ts ?? null, nowSec, lastTrade: last ?? null, lastSell: this.lastSell() });
+  }
+
+  private lastSell(): Trade | null {
+    return this.trades.recent(500).find((t) => t.side === 'sell') ?? null;
   }
 
   async evaluate(decision: Decision, s: MarketSnapshot, quoteFn: QuoteFn): Promise<RiskVerdict> {
@@ -86,6 +90,10 @@ export class RiskManager implements IRiskManager {
     const step = stepRule(c, isBuy ? 'buy' : 'sell', execPrice, last ?? null, stopLoss);
     if (!step.ok && step.next !== null) {
       reasons.push(`price step: last ${last!.side} @ ${last!.price.toPrecision(6)}, next ${isBuy ? 'buy' : 'sell'} needs ${isBuy ? '<=' : '>='} ${step.next.toPrecision(6)} (now ${execPrice.toPrecision(6)})`);
+    }
+    if (isBuy) {
+      const rb = rebuyRule(c, execPrice, this.lastSell());
+      if (!rb.ok && rb.target !== null) reasons.push(`rebuy: needs price <= ${rb.target.toPrecision(6)} (${c.rebuyDiscountPct}% below last sell), now ${execPrice.toPrecision(6)}`);
     }
     if (dailyLossHit && !stopLoss) reasons.push(`daily loss ${lossPct.toFixed(2)}% >= max ${c.maxDailyLossPct}%`);
 

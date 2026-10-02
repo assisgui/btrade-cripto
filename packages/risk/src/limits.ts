@@ -23,6 +23,21 @@ export interface RiskConfig {
   sameSideStepPct: number;
   /** a buy needs the price at least this % below the last sell (buy back cheaper). 0 disables */
   rebuyDiscountPct: number;
+  /** a buy also needs the engine's buy-back probability >= this. 0 disables */
+  buybackMinProb: number;
+  /** no buy when RSI14 is above this (overheated run-up). 0 disables */
+  maxBuyRsi: number;
+  /** no buy when the 1h return (%) is above this. 0 disables */
+  maxBuyReturn1hPct: number;
+}
+
+/** Why buying now would chase a run-up (null = not overheated). */
+export function overheatedReason(cfg: RiskConfig, s: MarketSnapshot): string | null {
+  const rsi = s.indicators?.rsi14 ?? null;
+  const r1h = s.indicators?.return1h ?? null;
+  if (cfg.maxBuyRsi > 0 && rsi !== null && rsi > cfg.maxBuyRsi) return `RSI ${rsi.toFixed(1)} > ${cfg.maxBuyRsi}`;
+  if (cfg.maxBuyReturn1hPct > 0 && r1h !== null && r1h * 100 > cfg.maxBuyReturn1hPct) return `1h return ${(r1h * 100).toFixed(2)}% > ${cfg.maxBuyReturn1hPct}%`;
+  return null;
 }
 
 const BUCKETS: SizeBucket[] = ['small', 'medium', 'large'];
@@ -140,6 +155,7 @@ export function computeNow(
   let buyReason: NowState['buyReason'] = quoteAvail <= 0n ? 'no_quote_balance' : BUCKETS.every((b) => buy[b].belowMin) ? 'below_min_trade_value' : 'ok';
   const rebuy = rebuyRule(cfg, buyPx, ctx.lastSell ?? null);
   if (buyReason === 'ok' && !rebuy.ok) buyReason = 'above_rebuy_target';
+  if (buyReason === 'ok' && overheatedReason(cfg, s)) buyReason = 'overheated';
   if (buyReason === 'ok' && !buyStep.ok) buyReason = 'waiting_price_step';
 
   // sell rule evaluated at the probe (medium) size, like the snapshot's executable sell price

@@ -64,6 +64,9 @@ const schema = z.object({
   MAX_DAILY_LOSS_PCT: num(5),
   SAME_SIDE_STEP_PCT: num(0.5),
   REBUY_DISCOUNT_PCT: num(0.5),
+  BUYBACK_MIN_PROB: num(0.3),
+  MAX_BUY_RSI: num(75),
+  MAX_BUY_RETURN_1H_PCT: num(2),
 
   FLOW_TOLERANCE_NATIVE: num(0.5),
   USD_ORACLE: z.enum(['onchain', 'off']).default('onchain'),

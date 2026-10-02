@@ -59,6 +59,8 @@ export interface Decision {
   sizeBucket: SizeBucket;
   confidence: number;
   probabilities: Record<Action, number>;
+  /** P(yes) of the engine's separate 'good moment to buy back?' question, when asked */
+  buybackProbability?: number;
   raw: unknown;
 }
 
@@ -158,7 +160,7 @@ export interface NowState {
   sellAllowedNow: boolean;
   sellReason: SellReason;
   buyAllowedNow: boolean;
-  buyReason: 'ok' | 'no_quote_balance' | 'below_min_trade_value' | 'waiting_price_step' | 'above_rebuy_target';
+  buyReason: 'ok' | 'no_quote_balance' | 'below_min_trade_value' | 'waiting_price_step' | 'above_rebuy_target' | 'overheated';
   /** % the executable sell price must move to reach the profit target (positive = needs to rise) */
   pctToProfitTarget: number | null;
   /** % the sell price must move to reach the stop-loss (negative = needs to fall); null when disabled */
@@ -175,4 +177,6 @@ export interface NowState {
 export interface DecisionContext {
   now?: NowState;
   pnlPctVsInvested?: number | null;
+  /** most recent bot trades, newest first */
+  recentTrades?: Pick<Trade, 'ts' | 'side' | 'price'>[];
 }

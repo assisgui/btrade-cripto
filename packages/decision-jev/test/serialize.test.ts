@@ -35,12 +35,16 @@ describe('serializeState', () => {
   });
   it('has objective, relative indicators, recentCloses, portfolio and now', () => {
     const s = serializeState(snap, constraints, { now, pnlPctVsInvested: 1.5 }) as Record<string, any>;
-    expect(s.objective).toContain('Maximize total portfolio value measured in USDC');
+    expect(s.objective).toContain('Grow total portfolio value measured in USDC by buying MON low and selling MON high');
+    const bo = s.buyOpportunity as Record<string, unknown>;
+    expect(bo.lastSellPrice).toBe(0.0201);
+    expect(bo.pctBelowLastSell).toBe(0); // fixture: buy price == last sell
+    expect(bo.buyAllowedNow).toBe(true);
     expect(s.indicators.priceVsEmaShortPct).toBeCloseTo(0.5025, 2);
     expect(s.indicators.volatilityPer5mCandle).toBe(0.0021);
     expect(s.recentCloses.values).toHaveLength(12);
     expect(s.portfolio.pnlPctVsInvested).toBe(1.5);
     expect(s.now.sellReason).toBe('below_profit_target');
-    expect(s.constraints.note).toContain('never forces a sell');
+    expect(s.constraints.note).toContain('not into an overheated run-up');
   });
 });

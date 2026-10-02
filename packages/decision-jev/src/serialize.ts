@@ -16,7 +16,7 @@ export function serializeState(s: MarketSnapshot, c: RiskConstraintsForModel, ct
   const quoteBal = toNumber(s.balances.quote, quote.decimals);
   const total = baseBal * s.price + quoteBal;
   return {
-    objective: `Maximize total portfolio value measured in ${quote.symbol}. Hold ${base.symbol} only when it is expected to outperform holding ${quote.symbol}; use sell to protect value and buy to re-enter.`,
+    objective: `Grow total portfolio value measured in ${quote.symbol} by buying ${base.symbol} low and selling ${base.symbol} high. Both buy and sell are equally valid; ${quote.symbol} is idle capital that should be redeployed into ${base.symbol} when ${base.symbol} is cheap.`,
     task: `Trading ${base.symbol} (base) against ${quote.symbol} (quote). buy = spend ${quote.symbol} to acquire ${base.symbol}; sell = sell ${base.symbol} for ${quote.symbol}. Price is ${quote.symbol} per ${base.symbol}.`,
     price: r(s.price, 8),
     buyPrice: r(s.priceBuy, 8),
@@ -56,13 +56,30 @@ export function serializeState(s: MarketSnapshot, c: RiskConstraintsForModel, ct
       ? { unit: '% change of each past 5m close vs current price, oldest first', values: i.recentCloses.map((x) => r((x / s.price - 1) * 100, 2)) }
       : null,
     now: ctx.now ? (ctx.now as unknown as JsonValue) : null,
+    buyOpportunity: (() => {
+      const buyPx = s.priceBuy ?? s.price;
+      const ls = ctx.now?.rebuy.lastSellPrice ?? null;
+      return {
+        lastSellPrice: r(ls, 8),
+        pctBelowLastSell: ls && buyPx > 0 ? r((buyPx / ls - 1) * 100, 3) : null,
+        rebuyTargetPrice: r(ctx.now?.rebuy.targetPrice ?? null, 8),
+        pctToRebuyTarget: ctx.now?.rebuy.pctToRebuyTarget ?? null,
+        buyAllowedNow: ctx.now?.buyAllowedNow ?? null,
+        buyReason: ctx.now?.buyReason ?? null,
+        quoteBalanceIdlePct: total > 0 ? r((quoteBal / total) * 100, 4) : null,
+        meaning: `pctBelowLastSell < 0 means ${base.symbol} is now cheaper than where it was last sold; buying back there increases the ${base.symbol} held.`,
+      } as unknown as JsonValue;
+    })(),
+    recentTrades: ctx.recentTrades?.length && s.price > 0
+      ? ctx.recentTrades.map((t) => ({ side: t.side, price: r(t.price, 8), pctVsNow: r((t.price / s.price - 1) * 100, 3), minutesAgo: Math.round((Date.now() / 1000 - t.ts) / 60) }))
+      : null,
     constraints: {
       minProfitPctToSell: c.minProfitPct,
       stopLossPct: c.stopLossPct,
       gasReserveNative: c.gasReserveNative,
       minConfidence: c.minConfidence,
       tradeSizePctOfAvailable: c.sizePct,
-      note: 'A sell is executed only if the price is at/above the profit target, or, when you choose sell, if it is at/below the stop-loss (stop-loss never forces a sell by itself). A buy is executed only if the price is at least the rebuy discount below the last sell (see now.rebuy). Otherwise it is vetoed. Native gas reserve is untouchable. See `now` for what is possible right now.',
+      note: 'A sell executes only at/above the profit target (or at/below the stop-loss). A buy executes only below the rebuy target (see buyOpportunity) and not into an overheated run-up. Native gas reserve is untouchable. See `now` for what is possible right now.',
     },
   };
 }

@@ -1,6 +1,6 @@
 import type { Decision, IRiskManager, ITradeRepository, MarketSnapshot, NowState, QuoteFn, RiskVerdict, Token, Trade } from '@btrade/core';
 import { toNumber } from '@btrade/core';
-import { bucketAmountIn, computeNow, cooldownSecLeft, dailyLoss, gasInQuote, rebuyRule, sellRule, stepRule, type RiskConfig } from './limits.js';
+import { bucketAmountIn, computeNow, cooldownSecLeft, dailyLoss, gasInQuote, overheatedReason, rebuyRule, sellRule, stepRule, type RiskConfig } from './limits.js';
 
 export type { RiskConfig };
 
@@ -94,6 +94,10 @@ export class RiskManager implements IRiskManager {
     if (isBuy) {
       const rb = rebuyRule(c, execPrice, this.lastSell());
       if (!rb.ok && rb.target !== null) reasons.push(`rebuy: needs price <= ${rb.target.toPrecision(6)} (${c.rebuyDiscountPct}% below last sell), now ${execPrice.toPrecision(6)}`);
+      const hot = overheatedReason(c, s);
+      if (hot) reasons.push(`overheated: ${hot}`);
+      const pb = decision.buybackProbability;
+      if (c.buybackMinProb > 0 && pb !== undefined && pb < c.buybackMinProb) reasons.push(`buyback gate p=${pb.toFixed(2)} < min ${c.buybackMinProb}`);
     }
     if (dailyLossHit && !stopLoss) reasons.push(`daily loss ${lossPct.toFixed(2)}% >= max ${c.maxDailyLossPct}%`);
 

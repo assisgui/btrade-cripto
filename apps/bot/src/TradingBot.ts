@@ -125,7 +125,8 @@ export class TradingBot {
         log.debug({ trigger: change.reason, skip }, 'no trade possible; skipping decision');
         return;
       }
-      const decision = await this.d.engine.decide(snap, { now, pnlPctVsInvested: this.pnlPctVsInvested });
+      const recentTrades = this.d.storage.trades.recent(4).map((t) => ({ ts: t.ts, side: t.side, price: t.price }));
+      const decision = await this.d.engine.decide(snap, { now, pnlPctVsInvested: this.pnlPctVsInvested, recentTrades });
       this.d.detector.markSent(snap);
       this.d.storage.state.set('lastDecision', JSON.stringify({ action: decision.action, confidence: decision.confidence, at: snap.timestamp }));
       log.info({ trigger: change.reason, action: decision.action, size: decision.sizeBucket, confidence: decision.confidence, p: decision.probabilities }, 'decision');

@@ -116,6 +116,7 @@ async function main() {
       stopLossPct: c.STOP_LOSS_PCT, maxSlippageBps: c.MAX_SLIPPAGE_BPS, maxPriceImpactBps: c.MAX_PRICE_IMPACT_BPS,
       minTradeValue: c.MIN_TRADE_VALUE, maxTradeValue: c.MAX_TRADE_VALUE, maxGasCostPct: c.MAX_GAS_COST_PCT, tradeCooldownSec: c.TRADE_COOLDOWN_SEC,
       maxTradesPerDay: c.MAX_TRADES_PER_DAY, maxDailyLossPct: c.MAX_DAILY_LOSS_PCT, sameSideStepPct: c.SAME_SIDE_STEP_PCT, rebuyDiscountPct: c.REBUY_DISCOUNT_PCT,
+      buybackMinProb: c.BUYBACK_MIN_PROB, maxBuyRsi: c.MAX_BUY_RSI, maxBuyReturn1hPct: c.MAX_BUY_RETURN_1H_PCT,
     },
     storage.trades,
   );

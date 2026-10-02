@@ -1,4 +1,4 @@
-import { choice, TypeSafeClient } from '@typesafe-ai/sdk';
+import { choice, noul, TypeSafeClient } from '@typesafe-ai/sdk';
 import type { Action, Decision, DecisionContext, IDecisionEngine, MarketSnapshot, SizeBucket } from '@btrade/core';
 import type { RiskConstraintsForModel } from './constraints.js';
 import { serializeState } from './serialize.js';
@@ -28,12 +28,15 @@ export class JevDecisionEngine implements IDecisionEngine {
       state,
       questions: {
         action: choice(
-          `What should the bot do now with the ${base.symbol}/${quote.symbol} position? Goal: maximize portfolio value in ${quote.symbol}. Use the objective, portfolio, indicators, recentCloses and the \`now\` block (what is allowed right now).`,
+          `Decide the next trade for ${base.symbol}/${quote.symbol}. Goal: grow total portfolio value in ${quote.symbol} by buying low and selling high; buy and sell are equally valid. Read now.buyAllowedNow, now.sellAllowedNow and buyOpportunity.`,
           {
-            buy: `Buy ${base.symbol} using ${quote.symbol} (expected to outperform holding ${quote.symbol}; only executes if now.buyAllowedNow is true).`,
-            sell: `Sell ${base.symbol} for ${quote.symbol} (protect value; only executes if now.sellAllowedNow is true).`,
-            hold: 'Do nothing: no clear edge, costs too high, or waiting is better.',
+            buy: `Choose buy when now.buyAllowedNow is true AND buyOpportunity.pctBelowLastSell is negative AND the 1h return is not a sharp fall. Buying ${base.symbol} below the last sell price increases the ${base.symbol} held.`,
+            sell: 'Choose sell when now.sellAllowedNow is true AND price is at a local high (recent trend up, RSI high).',
+            hold: 'Choose hold when now.buyAllowedNow is false and now.sellAllowedNow is false, or when the price is above the last sell price and not at a sell level, or the market is falling sharply.',
           },
+        ),
+        buyback: noul(
+          `Is now a good moment to buy back ${base.symbol} with idle ${quote.symbol}? Consider buyOpportunity (price vs last sell), the recent trend and RSI; a run-up just below the last sell is not a good buy-back.`,
         ),
         size: choice('If a trade is made, how large should it be relative to available balance?', {
           small: 'Low conviction or high uncertainty; small fraction.',
@@ -50,6 +53,7 @@ export class JevDecisionEngine implements IDecisionEngine {
       sizeBucket: z.choice as SizeBucket,
       confidence: a.confidence,
       probabilities: { buy: p.buy ?? 0, sell: p.sell ?? 0, hold: p.hold ?? 0 },
+      buybackProbability: res.answers.buyback?.noul,
       raw: res,
     };
   }

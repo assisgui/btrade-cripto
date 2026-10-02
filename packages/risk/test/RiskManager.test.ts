@@ -10,7 +10,7 @@ const NOW = 1_800_000_000_000;
 const cfg: RiskConfig = {
   minConfidence: 0.6, gasReserveNative: 1n * E18, sizePct: { small: 10, medium: 25, large: 50 },
   minProfitPct: 1, stopLossPct: 10, maxSlippageBps: 100, maxPriceImpactBps: 100, minTradeValue: 0.00001, maxTradeValue: 0,
-  maxGasCostPct: 5, tradeCooldownSec: 300, maxTradesPerDay: 5, maxDailyLossPct: 5, sameSideStepPct: 0, rebuyDiscountPct: 0,
+  maxGasCostPct: 5, tradeCooldownSec: 300, maxTradesPerDay: 5, maxDailyLossPct: 5, sameSideStepPct: 0, rebuyDiscountPct: 0, buybackMinProb: 0, maxBuyRsi: 0, maxBuyReturn1hPct: 0,
 };
 
 const price = 0.000001; // WBTC per MON
@@ -230,5 +230,27 @@ describe('rebuy below last sell', () => {
     expect(now.buyReason).toBe('above_rebuy_target');
     expect(now.rebuy.targetPrice).toBeCloseTo(price * 0.995, 12);
     expect(now.rebuy.pctToRebuyTarget).toBeCloseTo(-0.5, 2);
+  });
+});
+
+describe('buy safeguards: buyback gate and overheated filter', () => {
+  const buyQuote = async (_a: Token, _b: Token, amountIn: bigint): Promise<Quote> =>
+    ({ amountIn, amountOut: BigInt(Math.round(Number(amountIn) / 1e8 / price * 1e18)), priceImpactBps: 1, fee: 500, route: [] }) as Quote;
+  const ind = (rsi14: number, return1h: number) => ({
+    indicators: { return5m: 0, return1h, return24h: 0, volatility: 0, emaShort: price, emaLong: price, rsi14, recentCloses: [] },
+  }) as Partial<MarketSnapshot>;
+  it('vetoes a buy whose buyback probability is below the minimum, allows it above, ignores it when absent', async () => {
+    const rm = mk({ buybackMinProb: 0.5 });
+    expect((await rm.evaluate(dec('buy', { buybackProbability: 0.3 }), snap(), buyQuote)).reasons.join()).toMatch(/buyback gate p=0.30/);
+    expect((await rm.evaluate(dec('buy', { buybackProbability: 0.7 }), snap(), buyQuote)).reasons.join()).not.toMatch(/buyback/);
+    expect((await rm.evaluate(dec('buy'), snap(), buyQuote)).reasons.join()).not.toMatch(/buyback/);
+  });
+  it('vetoes buying into an overheated run-up (RSI or 1h return) and reports it in assess', async () => {
+    const rm = mk({ maxBuyRsi: 75, maxBuyReturn1hPct: 2, tradeCooldownSec: 0 });
+    expect((await rm.evaluate(dec('buy'), snap(ind(80, 0)), buyQuote)).reasons.join()).toMatch(/overheated: RSI 80/);
+    expect((await rm.evaluate(dec('buy'), snap(ind(60, 0.03)), buyQuote)).reasons.join()).toMatch(/overheated: 1h return 3.00%/);
+    expect((await rm.evaluate(dec('buy'), snap(ind(60, 0.01)), buyQuote)).reasons.join()).not.toMatch(/overheated/);
+    expect(rm.assess(snap(ind(80, 0))).buyReason).toBe('overheated');
+    expect((await rm.evaluate(dec('sell'), snap(ind(80, 0)), buyQuote)).reasons.join()).not.toMatch(/overheated/);
   });
 });
